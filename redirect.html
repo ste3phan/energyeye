@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>EnergyEye Redirect</title>
+    <script>
+        window.onload = function() {
+            // Get the token from URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const token = urlParams.get('token');
+            const type = urlParams.get('type');
+            
+            // Redirect to app
+            window.location.href = `energyeye://?token=${token}&type=${type}`;
+        }
+    </script>
+</head>
+<body>
+    <p>Redirecting to EnergyEye app...</p>
+</body>
+</html>
