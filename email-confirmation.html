@@ -92,41 +92,65 @@
             const actionButton = document.getElementById('action-button');
             
             try {
+                console.log('Starting email confirmation process');
+                console.log('Current URL:', window.location.href);
+                
+                // Log the full URL parts
+                console.log('URL parts:', {
+                    hash: window.location.hash,
+                    search: window.location.search,
+                    pathname: window.location.pathname
+                });
+
                 // Try to get the token from the fragment identifier (#)
                 const hashParams = new URLSearchParams(window.location.hash.substring(1));
                 let token = hashParams.get('token_hash') || hashParams.get('token');
                 let type = hashParams.get('type');
                 let email = hashParams.get('email');
                 
+                console.log('Hash parameters:', { token, type, email });
+
                 // If not in fragment, try query parameters
                 if (!token || !type || !email) {
+                    console.log('No parameters in hash, checking query string');
                     const queryParams = new URLSearchParams(window.location.search);
                     token = queryParams.get('token_hash') || queryParams.get('token');
                     type = queryParams.get('type');
                     email = queryParams.get('email');
+                    console.log('Query parameters:', { token, type, email });
                 }
 
                 if (!token || !type || !email) {
                     throw new Error('Ungültiger Bestätigungslink. Bitte überprüfen Sie den Link in Ihrer E-Mail.');
                 }
 
-                console.log('Verifying email with token:', { token, type, email });
+                console.log('Final parameters:', { token, type, email });
 
                 // First try to redirect to the app
-                const appUrl = `energyeye://?token_hash=${token}&type=${type}&email=${email}`;
-                const appWindow = window.open(appUrl, '_self');
+                const appUrl = `energyeye://?token_hash=${encodeURIComponent(token)}&type=${encodeURIComponent(type)}&email=${encodeURIComponent(email)}`;
+                console.log('Attempting app redirect to:', appUrl);
+                
+                window.location.href = appUrl;
                 
                 // Wait a bit to see if the redirect worked
                 await new Promise(resolve => setTimeout(resolve, 2000));
 
                 // If we're still here, verify directly in the browser
-                console.log('App redirect failed, verifying in browser...');
+                console.log('App redirect did not complete, verifying in browser...');
                 
-                const { error: verifyError } = await supabase.auth.verifyOtp({
+                console.log('Calling verifyOtp with:', {
                     token_hash: token,
-                    type: 'email',
+                    type: type,
                     email: email
                 });
+
+                const { data: verifyData, error: verifyError } = await supabase.auth.verifyOtp({
+                    token_hash: token,
+                    type: 'signup',  
+                    email: email
+                });
+
+                console.log('verifyOtp response:', { data: verifyData, error: verifyError });
 
                 if (verifyError) {
                     console.error('Verification error:', verifyError);
@@ -137,6 +161,8 @@
 
                 // Get the user session
                 const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+                console.log('Session response:', { session, error: sessionError });
+                
                 if (sessionError) throw sessionError;
                 if (!session) throw new Error('Keine Sitzung gefunden');
 
@@ -147,6 +173,8 @@
                     .from('users')
                     .update({ is_email_verified: true })
                     .eq('id', session.user.id);
+
+                console.log('Update response:', { error: updateError });
 
                 if (updateError) throw updateError;
 
@@ -164,7 +192,9 @@
                 messageDiv.className = 'error';
                 messageDiv.innerHTML = `
                     Fehler bei der E-Mail-Bestätigung:<br>
-                    ${error.message || 'Unbekannter Fehler'}
+                    ${error.message || 'Unbekannter Fehler'}<br><br>
+                    Details für Support:<br>
+                    ${JSON.stringify(error, null, 2)}
                 `;
                 actionButton.style.display = 'block';
             }
