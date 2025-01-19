@@ -95,218 +95,230 @@
     </div>
 
     <script>
-        const SUPABASE_URL = 'https://umofebaydwfscsjjgjgp.supabase.co';
-        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVtb2ZlYmF5ZHdmc2NzampnamdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzYwOTAxNzYsImV4cCI6MjA1MTY2NjE3Nn0.5--flSqxcNDUH6JyWM1bN5nIq2S73mjD8cSD9m-OGuk';
-        
-        // Initialize Supabase client correctly
-        const { createClient } = supabase;
-        const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-        
-        let userEmail = null;
-
-        async function resendEmail() {
-            const messageDiv = document.getElementById('message');
-            const resendButton = document.getElementById('resend-button');
+        // Wait for Supabase to load
+        window.onload = async function() {
+            const SUPABASE_URL = 'https://umofebaydwfscsjjgjgp.supabase.co';
+            const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVtb2ZlYmF5ZHdmc2NzampnamdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzYwOTAxNzYsImV4cCI6MjA1MTY2NjE3Nn0.5--flSqxcNDUH6JyWM1bN5nIq2S73mjD8cSD9m-OGuk';
             
-            try {
-                if (!userEmail) {
-                    throw new Error('E-Mail-Adresse nicht gefunden');
-                }
-
-                resendButton.style.display = 'none';
-                messageDiv.innerHTML = '<span class="spinner"></span>Sende neue Bestätigungs-E-Mail...';
-                messageDiv.className = '';
-
-                const { error } = await supabaseClient.auth.resend({
-                    type: 'signup',
-                    email: userEmail,
-                    options: {
-                        emailRedirectTo: 'https://ste3phan.github.io/energyeye/email-confirmation.html'
-                    }
-                });
-
-                if (error) throw error;
-
-                messageDiv.className = 'success';
-                messageDiv.innerHTML = `
-                    Neue Bestätigungs-E-Mail wurde gesendet!<br>
-                    Bitte prüfen Sie Ihren E-Mail-Eingang.
-                `;
-            } catch (error) {
-                console.error('Error resending email:', error);
-                messageDiv.className = 'error';
-                messageDiv.innerHTML = `
-                    Fehler beim Senden der E-Mail:<br>
-                    ${error.message || 'Unbekannter Fehler'}
-                `;
-                resendButton.style.display = 'block';
+            // Make sure supabase is loaded
+            if (typeof supabase === 'undefined') {
+                console.error('Supabase client not loaded');
+                document.getElementById('message').innerHTML = 'Fehler beim Laden der Supabase-Bibliothek. Bitte laden Sie die Seite neu.';
+                return;
             }
-        }
-        
-        async function handleEmailConfirmation() {
-            const messageDiv = document.getElementById('message');
-            const actionButton = document.getElementById('action-button');
-            const resendButton = document.getElementById('resend-button');
+
+            // Initialize Supabase client
+            const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
             
-            try {
-                console.log('Starting email confirmation process');
-                console.log('Current URL:', window.location.href);
+            let userEmail = null;
+
+            async function resendEmail() {
+                const messageDiv = document.getElementById('message');
+                const resendButton = document.getElementById('resend-button');
                 
-                // Parse both query parameters and hash
-                const queryParams = new URLSearchParams(window.location.search);
-                const hashParams = new URLSearchParams(window.location.hash.substring(1));
+                try {
+                    if (!userEmail) {
+                        throw new Error('E-Mail-Adresse nicht gefunden');
+                    }
+
+                    resendButton.style.display = 'none';
+                    messageDiv.innerHTML = '<span class="spinner"></span>Sende neue Bestätigungs-E-Mail...';
+                    messageDiv.className = '';
+
+                    const { error } = await supabaseClient.auth.resend({
+                        type: 'signup',
+                        email: userEmail,
+                        options: {
+                            emailRedirectTo: 'https://ste3phan.github.io/energyeye/email-confirmation.html'
+                        }
+                    });
+
+                    if (error) throw error;
+
+                    messageDiv.className = 'success';
+                    messageDiv.innerHTML = `
+                        Neue Bestätigungs-E-Mail wurde gesendet!<br>
+                        Bitte prüfen Sie Ihren E-Mail-Eingang.
+                    `;
+                } catch (error) {
+                    console.error('Error resending email:', error);
+                    messageDiv.className = 'error';
+                    messageDiv.innerHTML = `
+                        Fehler beim Senden der E-Mail:<br>
+                        ${error.message || 'Unbekannter Fehler'}
+                    `;
+                    resendButton.style.display = 'block';
+                }
+            }
+
+            async function handleEmailConfirmation() {
+                const messageDiv = document.getElementById('message');
+                const actionButton = document.getElementById('action-button');
+                const resendButton = document.getElementById('resend-button');
                 
-                // Get all parameters from both sources
-                const getParam = (name) => queryParams.get(name) || hashParams.get(name);
-                
-                const error = getParam('error');
-                const errorCode = getParam('error_code');
-                const errorDescription = getParam('error_description');
-                const token = getParam('token');
-                const type = getParam('type');
-                userEmail = getParam('email');
-                
-                console.log('URL Parameters:', {
-                    error,
-                    errorCode,
-                    errorDescription,
-                    token,
-                    type,
-                    email: userEmail
-                });
-                
-                if (error) {
+                try {
+                    console.log('Starting email confirmation process');
+                    console.log('Current URL:', window.location.href);
+                    
+                    // Parse both query parameters and hash
+                    const queryParams = new URLSearchParams(window.location.search);
+                    const hashParams = new URLSearchParams(window.location.hash.substring(1));
+                    
+                    // Get all parameters from both sources
+                    const getParam = (name) => queryParams.get(name) || hashParams.get(name);
+                    
+                    const error = getParam('error');
+                    const errorCode = getParam('error_code');
+                    const errorDescription = getParam('error_description');
+                    const token = getParam('token');
+                    const type = getParam('type');
+                    userEmail = getParam('email');
+                    
+                    console.log('URL Parameters:', {
+                        error,
+                        errorCode,
+                        errorDescription,
+                        token,
+                        type,
+                        email: userEmail
+                    });
+                    
+                    if (error) {
+                        let errorMessage = 'Ein Fehler ist aufgetreten.';
+                        let showResendButton = false;
+
+                        if (errorCode === 'otp_expired') {
+                            errorMessage = 'Der Bestätigungslink ist abgelaufen.';
+                            showResendButton = true;
+                        } else if (error === 'access_denied') {
+                            errorMessage = 'Der Bestätigungslink ist ungültig.';
+                            showResendButton = true;
+                        } else if (error === 'server_error') {
+                            errorMessage = 'Es gab einen Fehler bei der Bestätigung. Bitte versuchen Sie es erneut.';
+                            showResendButton = true;
+                        }
+
+                        messageDiv.className = 'error';
+                        messageDiv.innerHTML = `
+                            ${errorMessage}<br><br>
+                            <details>
+                                <summary>Technische Details</summary>
+                                <pre>
+Error: ${error}
+Code: ${errorCode}
+Description: ${errorDescription}
+URL: ${window.location.href}
+                                </pre>
+                            </details>
+                        `;
+                        
+                        if (showResendButton && userEmail) {
+                            resendButton.style.display = 'block';
+                        }
+                        actionButton.style.display = 'block';
+                        return;
+                    }
+
+                    if (!token || !type) {
+                        throw new Error('Ungültiger Bestätigungslink. Bitte überprüfen Sie den Link in Ihrer E-Mail.');
+                    }
+
+                    // First try to redirect to the app
+                    const appUrl = `energyeye://?token=${encodeURIComponent(token)}&type=${encodeURIComponent(type)}`;
+                    console.log('Attempting app redirect to:', appUrl);
+                    
+                    // Store the token in localStorage for the app to use
+                    localStorage.setItem('confirmationToken', token);
+                    localStorage.setItem('confirmationType', type);
+                    
+                    window.location.href = appUrl;
+                    
+                    // Wait a bit to see if the redirect worked
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+
+                    // If we're still here, verify directly in the browser
+                    console.log('App redirect did not complete, verifying in browser...');
+
+                    const { data, error: verifyError } = await supabaseClient.auth.verifyOtp({
+                        token,
+                        type,
+                        email: userEmail
+                    });
+
+                    console.log('Verify response:', { data, error: verifyError });
+
+                    if (verifyError) {
+                        throw verifyError;
+                    }
+
+                    // Get the session after verification
+                    const { data: { session }, error: sessionError } = await supabaseClient.auth.getSession();
+                    console.log('Session response:', { session, error: sessionError });
+                    
+                    if (sessionError) throw sessionError;
+                    if (!session) throw new Error('Keine Sitzung gefunden');
+
+                    console.log('Got user session:', session.user.id);
+
+                    // Update the is_email_verified flag
+                    const { error: updateError } = await supabaseClient
+                        .from('users')
+                        .update({ is_email_verified: true })
+                        .eq('id', session.user.id);
+
+                    console.log('Update response:', { error: updateError });
+
+                    if (updateError) throw updateError;
+
+                    messageDiv.className = 'success';
+                    messageDiv.innerHTML = `
+                        E-Mail-Adresse wurde erfolgreich bestätigt!<br>
+                        Sie können sich jetzt in der App anmelden.
+                    `;
+                    actionButton.style.display = 'block';
+
+                } catch (error) {
+                    console.error('Error:', error);
+                    messageDiv.className = 'error';
+                    
                     let errorMessage = 'Ein Fehler ist aufgetreten.';
                     let showResendButton = false;
 
-                    if (errorCode === 'otp_expired') {
+                    if (error.message?.includes('expired')) {
                         errorMessage = 'Der Bestätigungslink ist abgelaufen.';
                         showResendButton = true;
-                    } else if (error === 'access_denied') {
+                    } else if (error.message?.includes('invalid')) {
                         errorMessage = 'Der Bestätigungslink ist ungültig.';
                         showResendButton = true;
-                    } else if (error === 'server_error') {
+                    } else {
                         errorMessage = 'Es gab einen Fehler bei der Bestätigung. Bitte versuchen Sie es erneut.';
                         showResendButton = true;
                     }
 
-                    messageDiv.className = 'error';
                     messageDiv.innerHTML = `
                         ${errorMessage}<br><br>
                         <details>
                             <summary>Technische Details</summary>
                             <pre>
-Error: ${error}
-Code: ${errorCode}
-Description: ${errorDescription}
 URL: ${window.location.href}
+Error: ${JSON.stringify(error, null, 2)}
                             </pre>
                         </details>
                     `;
-                    
+
                     if (showResendButton && userEmail) {
                         resendButton.style.display = 'block';
                     }
                     actionButton.style.display = 'block';
-                    return;
                 }
-
-                if (!token || !type) {
-                    throw new Error('Ungültiger Bestätigungslink. Bitte überprüfen Sie den Link in Ihrer E-Mail.');
-                }
-
-                // First try to redirect to the app
-                const appUrl = `energyeye://?token=${encodeURIComponent(token)}&type=${encodeURIComponent(type)}`;
-                console.log('Attempting app redirect to:', appUrl);
-                
-                // Store the token in localStorage for the app to use
-                localStorage.setItem('confirmationToken', token);
-                localStorage.setItem('confirmationType', type);
-                
-                window.location.href = appUrl;
-                
-                // Wait a bit to see if the redirect worked
-                await new Promise(resolve => setTimeout(resolve, 2000));
-
-                // If we're still here, verify directly in the browser
-                console.log('App redirect did not complete, verifying in browser...');
-
-                const { data, error: verifyError } = await supabaseClient.auth.verifyOtp({
-                    token,
-                    type,
-                    email: userEmail
-                });
-
-                console.log('Verify response:', { data, error: verifyError });
-
-                if (verifyError) {
-                    throw verifyError;
-                }
-
-                // Get the session after verification
-                const { data: { session }, error: sessionError } = await supabaseClient.auth.getSession();
-                console.log('Session response:', { session, error: sessionError });
-                
-                if (sessionError) throw sessionError;
-                if (!session) throw new Error('Keine Sitzung gefunden');
-
-                console.log('Got user session:', session.user.id);
-
-                // Update the is_email_verified flag
-                const { error: updateError } = await supabaseClient
-                    .from('users')
-                    .update({ is_email_verified: true })
-                    .eq('id', session.user.id);
-
-                console.log('Update response:', { error: updateError });
-
-                if (updateError) throw updateError;
-
-                messageDiv.className = 'success';
-                messageDiv.innerHTML = `
-                    E-Mail-Adresse wurde erfolgreich bestätigt!<br>
-                    Sie können sich jetzt in der App anmelden.
-                `;
-                actionButton.style.display = 'block';
-
-            } catch (error) {
-                console.error('Error:', error);
-                messageDiv.className = 'error';
-                
-                let errorMessage = 'Ein Fehler ist aufgetreten.';
-                let showResendButton = false;
-
-                if (error.message?.includes('expired')) {
-                    errorMessage = 'Der Bestätigungslink ist abgelaufen.';
-                    showResendButton = true;
-                } else if (error.message?.includes('invalid')) {
-                    errorMessage = 'Der Bestätigungslink ist ungültig.';
-                    showResendButton = true;
-                } else {
-                    errorMessage = 'Es gab einen Fehler bei der Bestätigung. Bitte versuchen Sie es erneut.';
-                    showResendButton = true;
-                }
-
-                messageDiv.innerHTML = `
-                    ${errorMessage}<br><br>
-                    <details>
-                        <summary>Technische Details</summary>
-                        <pre>
-URL: ${window.location.href}
-Error: ${JSON.stringify(error, null, 2)}
-                        </pre>
-                    </details>
-                `;
-
-                if (showResendButton && userEmail) {
-                    resendButton.style.display = 'block';
-                }
-                actionButton.style.display = 'block';
             }
-        }
 
-        // Start the process when the page loads
-        window.onload = handleEmailConfirmation;
+            // Make resendEmail globally available
+            window.resendEmail = resendEmail;
+
+            // Start the confirmation process
+            await handleEmailConfirmation();
+        };
     </script>
 </body>
 </html>
