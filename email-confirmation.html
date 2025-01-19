@@ -67,6 +67,14 @@
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
+        pre {
+            text-align: left;
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
     </style>
 </head>
 <body>
@@ -82,10 +90,12 @@
     </div>
 
     <script>
-        const SUPABASE_URL = 'https://ywxqrfvbqpufwjrxjrid.supabase.co';
-        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl3eHFyZnZicXB1ZndqcnhqcmlkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MDM2OTk4NTksImV4cCI6MjAxOTI3NTg1OX0.Xt6SgwQs7GKYKgvOgGVXE9yOVpBPHxDwXgbZyYOQXXE';
+        const SUPABASE_URL = 'https://umofebaydwfscsjjgjgp.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVtb2ZlYmF5ZHdmc2NzampnamdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MDU2NzU1NjAsImV4cCI6MjAyMTI1MTU2MH0.5SYEP_kw1kG0L0B-pvjKrA9YFJ8rzJWzFkLnuXS1Oj4';
         
-        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        // Initialize Supabase client correctly
+        const { createClient } = supabase;
+        const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         
         async function handleEmailConfirmation() {
             const messageDiv = document.getElementById('message');
@@ -95,39 +105,29 @@
                 console.log('Starting email confirmation process');
                 console.log('Current URL:', window.location.href);
                 
-                // Log the full URL parts
-                console.log('URL parts:', {
-                    hash: window.location.hash,
-                    search: window.location.search,
-                    pathname: window.location.pathname
-                });
-
-                // Try to get the token from the fragment identifier (#)
+                // Check for error parameters first
+                const queryParams = new URLSearchParams(window.location.search);
                 const hashParams = new URLSearchParams(window.location.hash.substring(1));
-                let token = hashParams.get('token_hash') || hashParams.get('token');
-                let type = hashParams.get('type');
-                let email = hashParams.get('email');
                 
-                console.log('Hash parameters:', { token, type, email });
-
-                // If not in fragment, try query parameters
-                if (!token || !type || !email) {
-                    console.log('No parameters in hash, checking query string');
-                    const queryParams = new URLSearchParams(window.location.search);
-                    token = queryParams.get('token_hash') || queryParams.get('token');
-                    type = queryParams.get('type');
-                    email = queryParams.get('email');
-                    console.log('Query parameters:', { token, type, email });
+                const error = queryParams.get('error') || hashParams.get('error');
+                const errorDescription = queryParams.get('error_description') || hashParams.get('error_description');
+                
+                if (error) {
+                    throw new Error(`${error}: ${errorDescription}`);
                 }
 
-                if (!token || !type || !email) {
+                // Get token from URL
+                const token = queryParams.get('token') || hashParams.get('token');
+                const type = queryParams.get('type') || hashParams.get('type');
+                
+                if (!token || !type) {
                     throw new Error('Ungültiger Bestätigungslink. Bitte überprüfen Sie den Link in Ihrer E-Mail.');
                 }
 
-                console.log('Final parameters:', { token, type, email });
+                console.log('Parameters:', { token, type });
 
                 // First try to redirect to the app
-                const appUrl = `energyeye://?token_hash=${encodeURIComponent(token)}&type=${encodeURIComponent(type)}&email=${encodeURIComponent(email)}`;
+                const appUrl = `energyeye://?token=${encodeURIComponent(token)}&type=${encodeURIComponent(type)}`;
                 console.log('Attempting app redirect to:', appUrl);
                 
                 window.location.href = appUrl;
@@ -137,30 +137,10 @@
 
                 // If we're still here, verify directly in the browser
                 console.log('App redirect did not complete, verifying in browser...');
-                
-                console.log('Calling verifyOtp with:', {
-                    token_hash: token,
-                    type: type,
-                    email: email
-                });
 
-                const { data: verifyData, error: verifyError } = await supabase.auth.verifyOtp({
-                    token_hash: token,
-                    type: 'signup',  
-                    email: email
-                });
-
-                console.log('verifyOtp response:', { data: verifyData, error: verifyError });
-
-                if (verifyError) {
-                    console.error('Verification error:', verifyError);
-                    throw verifyError;
-                }
-
-                console.log('Email verified successfully');
-
-                // Get the user session
-                const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+                // The token is already being verified by Supabase's redirect
+                // We just need to check if it was successful
+                const { data: { session }, error: sessionError } = await supabaseClient.auth.getSession();
                 console.log('Session response:', { session, error: sessionError });
                 
                 if (sessionError) throw sessionError;
@@ -169,7 +149,7 @@
                 console.log('Got user session:', session.user.id);
 
                 // Update the is_email_verified flag
-                const { error: updateError } = await supabase
+                const { error: updateError } = await supabaseClient
                     .from('users')
                     .update({ is_email_verified: true })
                     .eq('id', session.user.id);
@@ -193,8 +173,10 @@
                 messageDiv.innerHTML = `
                     Fehler bei der E-Mail-Bestätigung:<br>
                     ${error.message || 'Unbekannter Fehler'}<br><br>
-                    Details für Support:<br>
-                    ${JSON.stringify(error, null, 2)}
+                    <pre>
+                    URL: ${window.location.href}
+                    Error: ${JSON.stringify(error, null, 2)}
+                    </pre>
                 `;
                 actionButton.style.display = 'block';
             }
