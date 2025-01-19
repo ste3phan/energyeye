@@ -120,6 +120,9 @@
                 const { error } = await supabaseClient.auth.resend({
                     type: 'signup',
                     email: userEmail,
+                    options: {
+                        emailRedirectTo: window.location.origin + window.location.pathname
+                    }
                 });
 
                 if (error) throw error;
@@ -148,6 +151,8 @@
             try {
                 console.log('Starting email confirmation process');
                 console.log('Current URL:', window.location.href);
+                console.log('Origin:', window.location.origin);
+                console.log('Pathname:', window.location.pathname);
                 
                 // Check for error parameters first
                 const queryParams = new URLSearchParams(window.location.search);
@@ -157,9 +162,12 @@
                 const errorCode = queryParams.get('error_code') || hashParams.get('error_code');
                 const errorDescription = queryParams.get('error_description') || hashParams.get('error_description');
                 
+                console.log('Error details:', { error, errorCode, errorDescription });
+                
                 if (error) {
                     // Extract email from the URL if present
                     userEmail = queryParams.get('email') || hashParams.get('email');
+                    console.log('Found user email:', userEmail);
                     
                     let errorMessage = 'Ein Fehler ist aufgetreten.';
                     let showResendButton = false;
@@ -170,10 +178,26 @@
                     } else if (error === 'access_denied') {
                         errorMessage = 'Der Bestätigungslink ist ungültig.';
                         showResendButton = true;
+                    } else if (error === 'server_error') {
+                        errorMessage = 'Es gab einen Fehler bei der Bestätigung. Bitte versuchen Sie es erneut.';
+                        showResendButton = true;
                     }
 
+                    console.log('Showing error:', errorMessage, 'showResendButton:', showResendButton);
+
                     messageDiv.className = 'error';
-                    messageDiv.innerHTML = errorMessage;
+                    messageDiv.innerHTML = `
+                        ${errorMessage}<br><br>
+                        <details>
+                            <summary>Technische Details</summary>
+                            <pre>
+Error: ${error}
+Code: ${errorCode}
+Description: ${errorDescription}
+URL: ${window.location.href}
+                            </pre>
+                        </details>
+                    `;
                     
                     if (showResendButton && userEmail) {
                         resendButton.style.display = 'block';
@@ -237,12 +261,17 @@
             } catch (error) {
                 console.error('Error:', error);
                 // Only show technical details if it's not a known error
-                if (!error.message.includes('ungültig') && !error.message.includes('abgelaufen')) {
+                if (!error.message.includes('ungültig') && 
+                    !error.message.includes('abgelaufen') && 
+                    !error.message.includes('Fehler bei der Bestätigung')) {
                     messageDiv.innerHTML += `
-                        <pre>
-                        URL: ${window.location.href}
-                        Error: ${JSON.stringify(error, null, 2)}
-                        </pre>
+                        <details>
+                            <summary>Technische Details</summary>
+                            <pre>
+URL: ${window.location.href}
+Error: ${JSON.stringify(error, null, 2)}
+                            </pre>
+                        </details>
                     `;
                 }
             }
