@@ -87,6 +87,11 @@
         <div id="action-button" style="display: none;">
             <a href="energyeye://" class="button">Zur App</a>
         </div>
+        <div id="resend-button" style="display: none;">
+            <button onclick="resendEmail()" class="button" style="background-color: #198754;">
+                Bestätigungs-E-Mail erneut senden
+            </button>
+        </div>
     </div>
 
     <script>
@@ -97,9 +102,48 @@
         const { createClient } = supabase;
         const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         
+        let userEmail = null;
+
+        async function resendEmail() {
+            const messageDiv = document.getElementById('message');
+            const resendButton = document.getElementById('resend-button');
+            
+            try {
+                if (!userEmail) {
+                    throw new Error('E-Mail-Adresse nicht gefunden');
+                }
+
+                resendButton.style.display = 'none';
+                messageDiv.innerHTML = '<span class="spinner"></span>Sende neue Bestätigungs-E-Mail...';
+                messageDiv.className = '';
+
+                const { error } = await supabaseClient.auth.resend({
+                    type: 'signup',
+                    email: userEmail,
+                });
+
+                if (error) throw error;
+
+                messageDiv.className = 'success';
+                messageDiv.innerHTML = `
+                    Neue Bestätigungs-E-Mail wurde gesendet!<br>
+                    Bitte prüfen Sie Ihren E-Mail-Eingang.
+                `;
+            } catch (error) {
+                console.error('Error resending email:', error);
+                messageDiv.className = 'error';
+                messageDiv.innerHTML = `
+                    Fehler beim Senden der E-Mail:<br>
+                    ${error.message || 'Unbekannter Fehler'}
+                `;
+                resendButton.style.display = 'block';
+            }
+        }
+        
         async function handleEmailConfirmation() {
             const messageDiv = document.getElementById('message');
             const actionButton = document.getElementById('action-button');
+            const resendButton = document.getElementById('resend-button');
             
             try {
                 console.log('Starting email confirmation process');
@@ -110,21 +154,44 @@
                 const hashParams = new URLSearchParams(window.location.hash.substring(1));
                 
                 const error = queryParams.get('error') || hashParams.get('error');
+                const errorCode = queryParams.get('error_code') || hashParams.get('error_code');
                 const errorDescription = queryParams.get('error_description') || hashParams.get('error_description');
                 
                 if (error) {
-                    throw new Error(`${error}: ${errorDescription}`);
+                    // Extract email from the URL if present
+                    userEmail = queryParams.get('email') || hashParams.get('email');
+                    
+                    let errorMessage = 'Ein Fehler ist aufgetreten.';
+                    let showResendButton = false;
+
+                    if (errorCode === 'otp_expired') {
+                        errorMessage = 'Der Bestätigungslink ist abgelaufen.';
+                        showResendButton = true;
+                    } else if (error === 'access_denied') {
+                        errorMessage = 'Der Bestätigungslink ist ungültig.';
+                        showResendButton = true;
+                    }
+
+                    messageDiv.className = 'error';
+                    messageDiv.innerHTML = errorMessage;
+                    
+                    if (showResendButton && userEmail) {
+                        resendButton.style.display = 'block';
+                    }
+                    actionButton.style.display = 'block';
+                    throw new Error(errorMessage);
                 }
 
                 // Get token from URL
                 const token = queryParams.get('token') || hashParams.get('token');
                 const type = queryParams.get('type') || hashParams.get('type');
+                userEmail = queryParams.get('email') || hashParams.get('email');
                 
                 if (!token || !type) {
                     throw new Error('Ungültiger Bestätigungslink. Bitte überprüfen Sie den Link in Ihrer E-Mail.');
                 }
 
-                console.log('Parameters:', { token, type });
+                console.log('Parameters:', { token, type, email: userEmail });
 
                 // First try to redirect to the app
                 const appUrl = `energyeye://?token=${encodeURIComponent(token)}&type=${encodeURIComponent(type)}`;
@@ -169,16 +236,15 @@
 
             } catch (error) {
                 console.error('Error:', error);
-                messageDiv.className = 'error';
-                messageDiv.innerHTML = `
-                    Fehler bei der E-Mail-Bestätigung:<br>
-                    ${error.message || 'Unbekannter Fehler'}<br><br>
-                    <pre>
-                    URL: ${window.location.href}
-                    Error: ${JSON.stringify(error, null, 2)}
-                    </pre>
-                `;
-                actionButton.style.display = 'block';
+                // Only show technical details if it's not a known error
+                if (!error.message.includes('ungültig') && !error.message.includes('abgelaufen')) {
+                    messageDiv.innerHTML += `
+                        <pre>
+                        URL: ${window.location.href}
+                        Error: ${JSON.stringify(error, null, 2)}
+                        </pre>
+                    `;
+                }
             }
         }
 
