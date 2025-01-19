@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>EnergyEye E-Mail-Bestätigung</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            max-width: 600px;
+            margin: 40px auto;
+            padding: 20px;
+            text-align: center;
+            line-height: 1.6;
+            background-color: #f8f9fa;
+        }
+        .card {
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 20px;
+            margin-top: 20px;
+        }
+        .success {
+            color: #0f5132;
+            background-color: #d1e7dd;
+            border: 1px solid #badbcc;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 20px 0;
+        }
+        .error {
+            color: #842029;
+            background-color: #f8d7da;
+            border: 1px solid #f5c2c7;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 20px 0;
+        }
+        .button {
+            background-color: #0d6efd;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            text-decoration: none;
+            display: inline-block;
+            margin-top: 20px;
+        }
+        .button:hover {
+            background-color: #0b5ed7;
+        }
+        #message {
+            margin: 20px 0;
+        }
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(0,0,0,.1);
+            border-radius: 50%;
+            border-top-color: #0d6efd;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 10px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>EnergyEye</h1>
+        <div id="message">
+            <span class="spinner"></span>
+            Verarbeite E-Mail-Bestätigung...
+        </div>
+        <div id="action-button" style="display: none;">
+            <a href="energyeye://" class="button">Zur App</a>
+        </div>
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://ywxqrfvbqpufwjrxjrid.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl3eHFyZnZicXB1ZndqcnhqcmlkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MDM2OTk4NTksImV4cCI6MjAxOTI3NTg1OX0.Xt6SgwQs7GKYKgvOgGVXE9yOVpBPHxDwXgbZyYOQXXE';
+        
+        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        
+        async function handleEmailConfirmation() {
+            const messageDiv = document.getElementById('message');
+            const actionButton = document.getElementById('action-button');
+            
+            try {
+                // Try to get the token from the fragment identifier (#)
+                const hashParams = new URLSearchParams(window.location.hash.substring(1));
+                let token = hashParams.get('token_hash') || hashParams.get('token');
+                let type = hashParams.get('type');
+                let email = hashParams.get('email');
+                
+                // If not in fragment, try query parameters
+                if (!token || !type || !email) {
+                    const queryParams = new URLSearchParams(window.location.search);
+                    token = queryParams.get('token_hash') || queryParams.get('token');
+                    type = queryParams.get('type');
+                    email = queryParams.get('email');
+                }
+
+                if (!token || !type || !email) {
+                    throw new Error('Ungültiger Bestätigungslink. Bitte überprüfen Sie den Link in Ihrer E-Mail.');
+                }
+
+                console.log('Verifying email with token:', { token, type, email });
+
+                // First try to redirect to the app
+                const appUrl = `energyeye://?token_hash=${token}&type=${type}&email=${email}`;
+                const appWindow = window.open(appUrl, '_self');
+                
+                // Wait a bit to see if the redirect worked
+                await new Promise(resolve => setTimeout(resolve, 2000));
+
+                // If we're still here, verify directly in the browser
+                console.log('App redirect failed, verifying in browser...');
+                
+                const { error: verifyError } = await supabase.auth.verifyOtp({
+                    token_hash: token,
+                    type: 'email',
+                    email: email
+                });
+
+                if (verifyError) {
+                    console.error('Verification error:', verifyError);
+                    throw verifyError;
+                }
+
+                console.log('Email verified successfully');
+
+                // Get the user session
+                const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+                if (sessionError) throw sessionError;
+                if (!session) throw new Error('Keine Sitzung gefunden');
+
+                console.log('Got user session:', session.user.id);
+
+                // Update the is_email_verified flag
+                const { error: updateError } = await supabase
+                    .from('users')
+                    .update({ is_email_verified: true })
+                    .eq('id', session.user.id);
+
+                if (updateError) throw updateError;
+
+                console.log('User verification status updated');
+
+                messageDiv.className = 'success';
+                messageDiv.innerHTML = `
+                    E-Mail-Adresse wurde erfolgreich bestätigt!<br>
+                    Sie können sich jetzt in der App anmelden.
+                `;
+                actionButton.style.display = 'block';
+
+            } catch (error) {
+                console.error('Error:', error);
+                messageDiv.className = 'error';
+                messageDiv.innerHTML = `
+                    Fehler bei der E-Mail-Bestätigung:<br>
+                    ${error.message || 'Unbekannter Fehler'}
+                `;
+                actionButton.style.display = 'block';
+            }
+        }
+
+        // Start the process when the page loads
+        window.onload = handleEmailConfirmation;
+    </script>
+</body>
+</html>
