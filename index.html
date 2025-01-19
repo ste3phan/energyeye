@@ -1,20 +1,134 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>EnergyEye Redirect</title>
-    <script>
-        window.onload = function() {
-            // Get the token from URL
-            const urlParams = new URLSearchParams(window.location.search);
-            const token = urlParams.get('token');
-            const type = urlParams.get('type');
-            
-            // Redirect to app
-            window.location.href = `energyeye://?token=${token}&type=${type}`;
+    <title>EnergyEye E-Mail-Bestätigung</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            max-width: 600px;
+            margin: 40px auto;
+            padding: 20px;
+            text-align: center;
+            line-height: 1.6;
         }
-    </script>
+        .card {
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 20px;
+            margin-top: 20px;
+        }
+        .success {
+            color: #0f5132;
+            background-color: #d1e7dd;
+            border: 1px solid #badbcc;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 20px 0;
+        }
+        .error {
+            color: #842029;
+            background-color: #f8d7da;
+            border: 1px solid #f5c2c7;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 20px 0;
+        }
+        .button {
+            background-color: #0d6efd;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            text-decoration: none;
+            display: inline-block;
+            margin-top: 20px;
+        }
+        .button:hover {
+            background-color: #0b5ed7;
+        }
+        #message {
+            margin: 20px 0;
+        }
+    </style>
 </head>
 <body>
-    <p>Redirecting to EnergyEye app...</p>
+    <div class="card">
+        <h1>EnergyEye</h1>
+        <div id="message">Verarbeite E-Mail-Bestätigung...</div>
+        <div id="action-button" style="display: none;">
+            <a href="energyeye://" class="button">Zur App</a>
+        </div>
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://YOUR_PROJECT_URL.supabase.co';
+        const SUPABASE_ANON_KEY = 'YOUR_ANON_KEY';
+        
+        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        
+        async function handleEmailConfirmation() {
+            const messageDiv = document.getElementById('message');
+            const actionButton = document.getElementById('action-button');
+            
+            try {
+                // Get the token from URL
+                const urlParams = new URLSearchParams(window.location.search);
+                const token = urlParams.get('token');
+                const type = urlParams.get('type');
+                
+                if (!token || !type) {
+                    throw new Error('Ungültiger Link');
+                }
+
+                // First try to redirect to the app
+                if (type === 'email_confirmation') {
+                    window.location.href = `energyeye://?token=${token}&type=${type}`;
+                    
+                    // Wait a bit to see if the redirect worked
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+
+                // If we're still here, the app redirect didn't work
+                // Verify the token directly
+                const { error } = await supabase.auth.verifyOTP({
+                    token,
+                    type: 'email',
+                });
+
+                if (error) throw error;
+
+                // Update the is_email_verified flag in the database
+                const { user, error: userError } = await supabase.auth.getUser();
+                if (userError) throw userError;
+
+                await supabase
+                    .from('users')
+                    .update({ is_email_verified: true })
+                    .eq('id', user.id);
+
+                messageDiv.className = 'success';
+                messageDiv.innerHTML = `
+                    E-Mail-Adresse wurde erfolgreich bestätigt!<br>
+                    Sie können sich jetzt in der App anmelden.
+                `;
+                actionButton.style.display = 'block';
+
+            } catch (error) {
+                console.error('Error:', error);
+                messageDiv.className = 'error';
+                messageDiv.innerHTML = `
+                    Fehler bei der E-Mail-Bestätigung:<br>
+                    ${error.message || 'Unbekannter Fehler'}
+                `;
+            }
+        }
+
+        // Start the process when the page loads
+        window.onload = handleEmailConfirmation;
+    </script>
 </body>
 </html>
