@@ -121,7 +121,7 @@
                     type: 'signup',
                     email: userEmail,
                     options: {
-                        emailRedirectTo: window.location.origin + window.location.pathname
+                        emailRedirectTo: 'https://ste3phan.github.io/energyeye/email-confirmation.html'
                     }
                 });
 
@@ -151,24 +151,31 @@
             try {
                 console.log('Starting email confirmation process');
                 console.log('Current URL:', window.location.href);
-                console.log('Origin:', window.location.origin);
-                console.log('Pathname:', window.location.pathname);
                 
-                // Check for error parameters first
+                // Parse both query parameters and hash
                 const queryParams = new URLSearchParams(window.location.search);
                 const hashParams = new URLSearchParams(window.location.hash.substring(1));
                 
-                const error = queryParams.get('error') || hashParams.get('error');
-                const errorCode = queryParams.get('error_code') || hashParams.get('error_code');
-                const errorDescription = queryParams.get('error_description') || hashParams.get('error_description');
+                // Get all parameters from both sources
+                const getParam = (name) => queryParams.get(name) || hashParams.get(name);
                 
-                console.log('Error details:', { error, errorCode, errorDescription });
+                const error = getParam('error');
+                const errorCode = getParam('error_code');
+                const errorDescription = getParam('error_description');
+                const token = getParam('token');
+                const type = getParam('type');
+                userEmail = getParam('email');
+                
+                console.log('URL Parameters:', {
+                    error,
+                    errorCode,
+                    errorDescription,
+                    token,
+                    type,
+                    email: userEmail
+                });
                 
                 if (error) {
-                    // Extract email from the URL if present
-                    userEmail = queryParams.get('email') || hashParams.get('email');
-                    console.log('Found user email:', userEmail);
-                    
                     let errorMessage = 'Ein Fehler ist aufgetreten.';
                     let showResendButton = false;
 
@@ -182,8 +189,6 @@
                         errorMessage = 'Es gab einen Fehler bei der Bestätigung. Bitte versuchen Sie es erneut.';
                         showResendButton = true;
                     }
-
-                    console.log('Showing error:', errorMessage, 'showResendButton:', showResendButton);
 
                     messageDiv.className = 'error';
                     messageDiv.innerHTML = `
@@ -206,21 +211,30 @@ URL: ${window.location.href}
                     return;
                 }
 
-                // Get token from URL
-                const token = queryParams.get('token') || hashParams.get('token');
-                const type = queryParams.get('type') || hashParams.get('type');
-                userEmail = queryParams.get('email') || hashParams.get('email');
-                
                 if (!token || !type) {
                     throw new Error('Ungültiger Bestätigungslink. Bitte überprüfen Sie den Link in Ihrer E-Mail.');
                 }
 
-                console.log('Parameters:', { token, type, email: userEmail });
+                // First try to redirect to the app
+                const appUrl = `energyeye://?token=${encodeURIComponent(token)}&type=${encodeURIComponent(type)}`;
+                console.log('Attempting app redirect to:', appUrl);
+                
+                // Store the token in localStorage for the app to use
+                localStorage.setItem('confirmationToken', token);
+                localStorage.setItem('confirmationType', type);
+                
+                window.location.href = appUrl;
+                
+                // Wait a bit to see if the redirect worked
+                await new Promise(resolve => setTimeout(resolve, 2000));
 
-                // Try to verify the token directly
+                // If we're still here, verify directly in the browser
+                console.log('App redirect did not complete, verifying in browser...');
+
                 const { data, error: verifyError } = await supabaseClient.auth.verifyOtp({
                     token,
-                    type
+                    type,
+                    email: userEmail
                 });
 
                 console.log('Verify response:', { data, error: verifyError });
@@ -248,18 +262,12 @@ URL: ${window.location.href}
 
                 if (updateError) throw updateError;
 
-                console.log('User verification status updated');
-
                 messageDiv.className = 'success';
                 messageDiv.innerHTML = `
                     E-Mail-Adresse wurde erfolgreich bestätigt!<br>
                     Sie können sich jetzt in der App anmelden.
                 `;
-
-                // Try to redirect to the app
-                const appUrl = 'energyeye://';
-                console.log('Redirecting to app:', appUrl);
-                window.location.href = appUrl;
+                actionButton.style.display = 'block';
 
             } catch (error) {
                 console.error('Error:', error);
