@@ -203,7 +203,7 @@ URL: ${window.location.href}
                         resendButton.style.display = 'block';
                     }
                     actionButton.style.display = 'block';
-                    throw new Error(errorMessage);
+                    return;
                 }
 
                 // Get token from URL
@@ -217,20 +217,19 @@ URL: ${window.location.href}
 
                 console.log('Parameters:', { token, type, email: userEmail });
 
-                // First try to redirect to the app
-                const appUrl = `energyeye://?token=${encodeURIComponent(token)}&type=${encodeURIComponent(type)}`;
-                console.log('Attempting app redirect to:', appUrl);
-                
-                window.location.href = appUrl;
-                
-                // Wait a bit to see if the redirect worked
-                await new Promise(resolve => setTimeout(resolve, 2000));
+                // Try to verify the token directly
+                const { data, error: verifyError } = await supabaseClient.auth.verifyOtp({
+                    token,
+                    type
+                });
 
-                // If we're still here, verify directly in the browser
-                console.log('App redirect did not complete, verifying in browser...');
+                console.log('Verify response:', { data, error: verifyError });
 
-                // The token is already being verified by Supabase's redirect
-                // We just need to check if it was successful
+                if (verifyError) {
+                    throw verifyError;
+                }
+
+                // Get the session after verification
                 const { data: { session }, error: sessionError } = await supabaseClient.auth.getSession();
                 console.log('Session response:', { session, error: sessionError });
                 
@@ -256,24 +255,45 @@ URL: ${window.location.href}
                     E-Mail-Adresse wurde erfolgreich bestätigt!<br>
                     Sie können sich jetzt in der App anmelden.
                 `;
-                actionButton.style.display = 'block';
+
+                // Try to redirect to the app
+                const appUrl = 'energyeye://';
+                console.log('Redirecting to app:', appUrl);
+                window.location.href = appUrl;
 
             } catch (error) {
                 console.error('Error:', error);
-                // Only show technical details if it's not a known error
-                if (!error.message.includes('ungültig') && 
-                    !error.message.includes('abgelaufen') && 
-                    !error.message.includes('Fehler bei der Bestätigung')) {
-                    messageDiv.innerHTML += `
-                        <details>
-                            <summary>Technische Details</summary>
-                            <pre>
+                messageDiv.className = 'error';
+                
+                let errorMessage = 'Ein Fehler ist aufgetreten.';
+                let showResendButton = false;
+
+                if (error.message?.includes('expired')) {
+                    errorMessage = 'Der Bestätigungslink ist abgelaufen.';
+                    showResendButton = true;
+                } else if (error.message?.includes('invalid')) {
+                    errorMessage = 'Der Bestätigungslink ist ungültig.';
+                    showResendButton = true;
+                } else {
+                    errorMessage = 'Es gab einen Fehler bei der Bestätigung. Bitte versuchen Sie es erneut.';
+                    showResendButton = true;
+                }
+
+                messageDiv.innerHTML = `
+                    ${errorMessage}<br><br>
+                    <details>
+                        <summary>Technische Details</summary>
+                        <pre>
 URL: ${window.location.href}
 Error: ${JSON.stringify(error, null, 2)}
-                            </pre>
-                        </details>
-                    `;
+                        </pre>
+                    </details>
+                `;
+
+                if (showResendButton && userEmail) {
+                    resendButton.style.display = 'block';
                 }
+                actionButton.style.display = 'block';
             }
         }
 
